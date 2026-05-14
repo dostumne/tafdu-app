@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 import { auth } from "./firebase";
 import {
   createUserWithEmailAndPassword,
@@ -10,10 +10,12 @@ import {
 import {
   collection,
   getDocs,
-  serverTimestamp
+  serverTimestamp,
+  query,
+  where
 } from "firebase/firestore";
 
-import { doc, setDoc } from "firebase/firestore";
+import { doc, setDoc, addDoc } from "firebase/firestore";
 import { db } from "./firebase";
 
 function App() {
@@ -30,6 +32,24 @@ function App() {
   const [name, setName] = useState("");
   const [surname, setSurname] = useState("");
   const [nickname, setNickname] = useState("");
+  const [tc, setTc] = useState("");
+  const [gender, setGender] = useState("");
+  const [phone, setPhone] = useState("");
+
+  // PAGE
+  const [page, setPage] = useState("dashboard");
+
+  // FIELD
+  const [fieldName, setFieldName] = useState("");
+  const [ownership, setOwnership] = useState("");
+  const [size, setSize] = useState("");
+  const [unit, setUnit] = useState("metrekare");
+
+  const [city, setCity] = useState("");
+  const [district, setDistrict] = useState("");
+  const [neighborhood, setNeighborhood] = useState("");
+
+  const [fields, setFields] = useState([]);
 
   // DATE PICKER
   const [day, setDay] = useState("");
@@ -47,6 +67,17 @@ function App() {
     return new Date(year, month, 0).getDate();
   };
 
+  // UNIT CALCULATOR
+  const unitMultipliers = {
+    metrekare: 1,
+    dekar: 1000,
+    dönüm: 1000,
+    ar: 100,
+    hektar: 10000
+  };
+
+  const convertedSquareMeters = Number(size || 0) * unitMultipliers[unit];
+
   // UI
   const [user, setUser] = useState(null);
   const [error, setError] = useState("");
@@ -54,12 +85,45 @@ function App() {
 
   const [showPassword, setShowPassword] = useState(false);
 
-  // 🔥 AUTH STATE LISTENER
+
+  //AUTH STATE LISTENER
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
+    
       setUser(u);
+    
+      if (u) {
+      
+        setPage("dashboard");
+      
+        const q = query(
+          collection(db, "fields"),
+          where("userId", "==", u.uid)
+        );
+      
+        const snapshot = await getDocs(q);
+      
+        const arr = [];
+      
+        snapshot.forEach((doc) => {
+          arr.push({
+            id: doc.id,
+            ...doc.data()
+          });
+        });
+      
+        setFields(arr);
+      
+      } else {
+      
+        setFields([]);
+      
+      }
+    
     });
+  
     return () => unsub();
+  
   }, []);
 
   useEffect(() => {
@@ -85,6 +149,9 @@ function App() {
     setYear("");
     setError("");
     setShowRequiredErrors(false);
+    setTc("");
+    setGender("");
+    setPhone("");
   };
 
   const switchToLogin = () => {
@@ -122,7 +189,7 @@ function App() {
 
     setShowRequiredErrors(true);
 
-    if (!name || !surname || !day || !month || !year || !email || !password || !password2) {
+    if (!name || !surname || !day || !month || !year || !email || !password || !password2 || !tc || !gender || !phone) {
       setError("Lütfen tüm alanları doldur");
       return;
     }
@@ -167,11 +234,15 @@ function App() {
         nickname: finalNickname,
         birthdate,
         email: cleanEmail,
+        tc,
+        gender,
+        phone,
         role: "user",
         createdAt: serverTimestamp()
       });
 
       setUser(res.user);
+      setPage("addField");
     } catch (err) {
       setError(getErrorMessage(err.code));
     } finally {
@@ -185,10 +256,62 @@ function App() {
     setLoading(true);
 
     try {
-      const cleanEmail = email.toLowerCase().trim();
+      let loginEmail = email.toLowerCase().trim();
 
-      const res = await signInWithEmailAndPassword(auth, cleanEmail, password);
+      // email değilse kullanıcı ara
+      if (!loginEmail.includes("@")) {
+
+        const usersRef = collection(db, "users");
+
+        let q;
+
+        // telefon mu tc mi?
+        if (loginEmail.length === 11) {
+        
+          // önce tc dene
+          q = query(usersRef, where("tc", "==", loginEmail));
+        
+          let snapshot = await getDocs(q);
+        
+          // tc bulunamazsa telefonu dene
+          if (snapshot.empty) {
+            q = query(usersRef, where("phone", "==", loginEmail));
+            snapshot = await getDocs(q);
+          }
+        
+          if (snapshot.empty) {
+            setError("Kullanıcı bulunamadı");
+            setLoading(false);
+            return;
+          }
+        
+          loginEmail = snapshot.docs[0].data().email;
+        }
+        
+        } else {
+        
+          q = query(usersRef, where("phone", "==", loginEmail));
+        
+          const snapshot = await getDocs(q);
+        
+          if (snapshot.empty) {
+            setError("Kullanıcı bulunamadı");
+            setLoading(false);
+            return;
+          }
+        
+          loginEmail = snapshot.docs[0].data().email;
+        }
+
+      const res = await signInWithEmailAndPassword(
+        auth,
+        loginEmail,
+        password
+      );
+
       setUser(res.user);
+      setPage("dashboard");
+
     } catch (err) {
       setError(getErrorMessage(err.code));
     } finally {
@@ -196,27 +319,262 @@ function App() {
     }
   };
 
+  // TARLA KAYDETME
+  const saveField = async () => {
+
+    if (
+      !fieldName ||
+      !ownership ||
+      !size ||
+      !unit ||
+      !city ||
+      !district ||
+      !neighborhood
+    ) {
+      setError("Lütfen tüm tarla bilgilerini doldur");
+      return;
+    }
+
+    try {
+
+      await addDoc(collection(db, "fields"), {
+        userId: user.uid,
+
+        fieldName,
+        ownership,
+
+        size,
+        unit,
+
+        squareMeters: convertedSquareMeters,
+
+        city,
+        district,
+        neighborhood,
+
+        createdAt: serverTimestamp()
+      });
+
+      // listeye ekle
+      loadFields();
+
+      // temizle
+      setFieldName("");
+      setOwnership("");
+      setSize("");
+      setUnit("metrekare");
+      setCity("");
+      setDistrict("");
+      setNeighborhood("");
+
+      setPage("dashboard");
+
+    } catch (err) {
+      setError("Tarla kaydedilemedi");
+    }
+  };
+
+  // TARLA GÖSTERME
+  const loadFields = async () => {
+
+    if (!user) return;
+
+    const q = query(
+      collection(db, "fields"),
+      where("userId", "==", user.uid)
+    );
+
+    const snapshot = await getDocs(q);
+
+    const arr = [];
+
+    snapshot.forEach((doc) => {
+      arr.push({
+        id: doc.id,
+        ...doc.data()
+      });
+    });
+
+    setFields(arr);
+  };
+
   // LOGOUT
   const logout = async () => {
     await signOut(auth);
   };
 
-  // ================= DASHBOARD =================
+  // ================= USER PAGES =================
   if (user) {
+  
+    // TARLA EKLEME SAYFASI
+    if (page === "addField") {
+    
+      return (
+        <div className="min-h-screen bg-green-100 flex items-center justify-center p-4">
+        
+          <div className="bg-white p-6 rounded shadow w-full max-w-md">
+      
+            <h1 className="text-2xl font-bold mb-4 text-center">
+              Tarla Ekle
+            </h1>
+      
+            {error && (
+              <p className="text-red-500 text-sm mb-2">
+                {error}
+              </p>
+            )}
+  
+            <input
+              className="w-full border p-2 mb-2"
+              placeholder="Tarla İsmi"
+              value={fieldName}
+              onChange={(e)=>setFieldName(e.target.value)}
+            />
+  
+            <select
+              className="w-full border p-2 mb-2"
+              value={ownership}
+              onChange={(e)=>setOwnership(e.target.value)}
+            >
+              <option value="">Sahiplik</option>
+              <option value="Kendi">Kendi</option>
+              <option value="Kiralık">Kiralık</option>
+            </select>
+          
+            <div className="flex gap-2 mb-2">
+          
+              <input
+                type="number"
+                className="border p-2 flex-1"
+                placeholder="Boyut"
+                value={size}
+                onChange={(e)=>setSize(e.target.value)}
+              />
+  
+              <select
+                className="border p-2"
+                value={unit}
+                onChange={(e)=>setUnit(e.target.value)}
+              >
+                <option value="metrekare">m²</option>
+                <option value="dekar">Dekar</option>
+                <option value="dönüm">Dönüm</option>
+                <option value="ar">Ar</option>
+                <option value="hektar">Hektar</option>
+              </select>
+          
+            </div>
+          
+            <div className="text-sm text-gray-600 mb-3">
+              {convertedSquareMeters} m²
+            </div>
+          
+            <input
+              className="w-full border p-2 mb-2"
+              placeholder="İl"
+              value={city}
+              onChange={(e)=>setCity(e.target.value)}
+            />
+  
+            <input
+              className="w-full border p-2 mb-2"
+              placeholder="İlçe"
+              value={district}
+              onChange={(e)=>setDistrict(e.target.value)}
+            />
+  
+            <input
+              className="w-full border p-2 mb-4"
+              placeholder="Mahalle"
+              value={neighborhood}
+              onChange={(e)=>setNeighborhood(e.target.value)}
+            />
+  
+            <button
+              onClick={saveField}
+              className="w-full bg-green-500 text-white p-2 rounded"
+            >
+              Tarlayı Kaydet
+            </button>
+          
+          </div>
+        </div>
+      );
+    }
+  
+    // DASHBOARD
     return (
-      <div className="h-screen flex items-center justify-center bg-green-100">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold">TAFDU Dashboard</h1>
-          <p className="mt-2 font-semibold">
-            Hoş geldin, {user.email}
-          </p>
-
-          <button
-            onClick={logout}
-            className="mt-4 bg-red-500 text-white px-4 py-2 rounded"
-          >
-            Logout
-          </button>
+      <div className="min-h-screen bg-green-100 p-6">
+      
+        <div className="max-w-3xl mx-auto">
+    
+          <div className="bg-white p-6 rounded shadow mb-4">
+    
+            <h1 className="text-2xl font-bold">
+              TAFDU Dashboard
+            </h1>
+    
+            <p className="mt-2">
+              Hoş geldin, {user.email}
+            </p>
+    
+            <div className="flex gap-2 mt-4">
+    
+              <button
+                onClick={() => setPage("addField")}
+                className="bg-green-500 text-white px-4 py-2 rounded"
+              >
+                Yeni Tarla Ekle
+              </button>
+    
+              <button
+                onClick={logout}
+                className="bg-red-500 text-white px-4 py-2 rounded"
+              >
+                Logout
+              </button>
+    
+            </div>
+          </div>
+    
+          <div className="space-y-4">
+    
+            {fields.map((field) => (
+            
+              <div
+                key={field.id}
+                className="bg-white p-4 rounded shadow"
+              >
+              
+                <h2 className="text-xl font-bold">
+                  {field.fieldName}
+                </h2>
+            
+                <p>Sahiplik: {field.ownership}</p>
+            
+                <p>
+                  Boyut: {field.size} {field.unit}
+                </p>
+            
+                <p>
+                  m²: {field.squareMeters}
+                </p>
+            
+                <p>
+                  Konum:
+                  {" "}
+                  {field.city} /
+                  {" "}
+                  {field.district} /
+                  {" "}
+                  {field.neighborhood}
+                </p>
+            
+              </div>
+            ))}
+  
+          </div>
+          
         </div>
       </div>
     );
@@ -241,7 +599,7 @@ function App() {
 
           <input
             className="w-full border p-2 mb-2"
-            placeholder="Email *"
+            placeholder="Email / Telefon / TC *"
             value={email}
             onChange={(e)=>setEmail(e.target.value)}
           />
@@ -320,6 +678,36 @@ function App() {
         />
 
         <input className="w-full border p-2 mb-2" placeholder="Nickname" value={nickname} onChange={(e)=>setNickname(e.target.value)} />
+
+        <input
+          className={`w-full border p-2 mb-2 ${
+            showRequiredErrors && !tc ? "border-red-500 bg-red-50" : ""
+          }`}
+          placeholder="TC Kimlik No *"
+          value={tc}
+          onChange={(e) => setTc(e.target.value)}
+        />
+
+        <select
+          className={`w-full border p-2 mb-2 ${
+            showRequiredErrors && !gender ? "border-red-500 bg-red-50" : ""
+          }`}
+          value={gender}
+          onChange={(e) => setGender(e.target.value)}
+        >
+          <option value="">Cinsiyet</option>
+          <option value="Erkek">Erkek</option>
+          <option value="Kadın">Kadın</option>
+        </select>
+        
+        <input
+          className={`w-full border p-2 mb-2 ${
+            showRequiredErrors && !phone ? "border-red-500 bg-red-50" : ""
+          }`}
+          placeholder="Telefon No *"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+        />
 
         {/* DATE PICKER */}
         <div className="mb-3">
