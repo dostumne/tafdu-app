@@ -1,16 +1,22 @@
-# React + Vite
+# TAFDU - Tarımsal Finans Destek Uygulaması
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+TAFDU, tarımsal kota hesaplama ve risk yönetimi süreçlerini optimize ederek kaynak israfını azaltmayı hedefleyen mobil uyumlu bir platformdur.
 
-Currently, two official plugins are available:
+## Özellikler
+- Mobil uyumlu kullanıcı dostu arayüz
+- Giriş/Kayıt Olma ekranı
+- Sisteme tarla kaydetme ekranı
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Eklenecek Özellikler
+- Gerçek zamanlı ekim beyanları
+- Tarımsal risk analizi ve kota hesaplamaları
 
-## React Compiler
+## Teknolojiler
+- React + Vite
+- Tailwind CSS
+- Firebase
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+## Kurulum
+```bash
+npm install
+npm run dev

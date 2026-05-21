@@ -403,7 +403,7 @@ function App() {
     await signOut(auth);
   };
 
-  // ================= USER PAGES =================
+  // ================= USER PAGES ================= evet
   if (user) {
   
     // TARLA EKLEME SAYFASI
@@ -580,7 +580,7 @@ function App() {
     );
   }
 
-  // ================= LOGIN =================
+  // ================= LOGIN ================= sayfa olan
   if (mode === "login") {
     return (
       <div className="h-screen flex items-center justify-center bg-blue-100">
@@ -642,7 +642,7 @@ function App() {
     );
   }
 
-  // ================= REGISTER =================
+  // ================= REGISTER =================  sayfa olan
   return (
     <div className="h-screen flex items-center justify-center bg-blue-100">
           <div
